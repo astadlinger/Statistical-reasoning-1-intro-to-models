@@ -1,0 +1,237 @@
+---
+title: "Statistical reasoning 1: intro to models"
+author: "Alex Stadlinger & Emily Halim"
+format: pdf
+editor: visual
+---
+
+```{r}
+library(brms) # for statistics
+library(tidyverse)
+library(ggeffects) # for the prediction plot
+library(lterdatasampler) # for built-in datasets
+```
+
+Fiddler crab data
+
+```{r}
+head(pie_crab)
+```
+
+```{r}
+pie_crab %>% 
+  ggplot(aes(x = latitude, y = size)) +
+  geom_point() +
+  # Make the y-axis include 0
+  ylim(0, NA)
+```
+
+### Q1.1 Interpret the graph
+
+As latitude increases, size, on average, also increases. We are farily confident in this assertion because we can see a general increase. 
+
+### Q1.2 Beautify this graph
+```{r}
+pie_crab %>% 
+  ggplot(aes(x = latitude, y = size)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle("Size of crab across latitudes") +
+  labs(x = "Latitude",
+       y = "Size (mm)")
+  # Make the y-axis include 0
+  ylim(0, NA)
+```
+
+```{r}
+# latitude model
+m.crab.lat <- 
+  brm(data = pie_crab, # Give the model the pie_crab data
+      # Choose a gaussian (normal) distribution
+      family = gaussian,
+      # Specify the model here. 
+      size ~ latitude,
+      # Here's where you specify parameters for executing the Markov chains
+      # We're using similar to the defaults, except we set cores to 4 so the analysis runs faster than the default of 1
+      iter = 2000, warmup = 1000, chains = 4, cores = 4,
+      # Setting the "seed" determines which random numbers will get sampled.
+      # In this case, it makes the randomness of the Markov chain runs reproducible 
+      # (so that both of us get the exact same results when running the model)
+      seed = 4,
+      # Save the fitted model object as output - helpful for reloading in the output later
+      file = "output/m.crab.lat")
+```
+
+### Q1.3 What does the "iter" argument do?
+
+The iter argument defines how many iterations the Markov chains will run through. 
+
+```{r}
+summary(m.crab.lat)
+```
+
+```{r}
+plot(m.crab.lat) # show posteriors and chains
+```
+
+```{r}
+summary(m.crab.lat)
+```
+
+```{r}
+as_draws_df(m.crab.lat)  %>%  # extract the posterior samples from the model estimate
+  select(b_latitude)  %>%  # pull out the latitude samples from all 4 chains. we'll get a warning that we can ignore.
+  summarize(p_slope_lessthanorequalto_zero = sum(b_latitude <= 0)/length(b_latitude))
+```
+
+```{r}
+# compatibility interval. the shows uncertainty in the average response.
+confm.crab.lat <- predict_response(m.crab.lat)
+plot(confm.crab.lat, show_data = TRUE)
+```
+
+```{r}
+# prediction interval. this shows uncertainty in the data around the average response.
+confm.crab.lat <- predict_response(m.crab.lat, interval = 'prediction')
+plot(confm.crab.lat, show_data = TRUE)
+```
+
+### Q1.4 Make a hypothesis
+
+Higher variability would be associated with smaller crabs since we are operating on the assumption that we are going to consistently have larger crabs with a higher latitude, then with more variability, then we will have more smaller crabs.
+
+### Q1.5 Graph the data
+
+```{r}
+pie_crab %>% 
+  ggplot(aes(x = water_temp_sd, y = size)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(x = "Water Temperature Variability",
+       y = "Size (mm)")
+  # Make the y-axis include 0
+  ylim(0, NA)
+```
+
+### Q1.6 Interpret the graph
+
+Water temperature variability has very little affect on crab size. We are confident in this assertion because there is no relationship. 
+
+### Q1.7 Set up and run this new model
+ 
+```{r}
+# water temp sd model
+m.crab.watersd <- 
+  brm(data = pie_crab, # Give the model the pie_crab data
+      # Choose a gaussian (normal) distribution
+      family = gaussian,
+      # Specify the model here. 
+      size ~ water_temp_sd,
+      # Here's where you specify parameters for executing the Markov chains
+      # We're using similar to the defaults, except we set cores to 4 so the analysis runs faster than the default of 1
+      iter = 2000, warmup = 1000, chains = 4, cores = 4,
+      # Setting the "seed" determines which random numbers will get sampled.
+      # In this case, it makes the randomness of the Markov chain runs reproducible 
+      # (so that both of us get the exact same results when running the model)
+      seed = 4,
+      # Save the fitted model object as output - helpful for reloading in the output later
+      file = "output/m.crab.watersd")
+
+plot(m.crab.watersd) # show posteriors and chains
+
+summary(m.crab.watersd)
+```
+ 
+ ### Q1.8 Assess the model
+ 
+ The model ran correctly because the posterior samples have a smooth distribution with one clean peak, the chains are overlapping, and the chains are flat. 
+
+### Q1.9 Interpret the model
+
+For every one standard deviation increase in water temperature, carapace size increases 0.10 millimeters. The confidence interval is -0.23 to 0.42, so it includes 0, and is not reasonably different from 0. 
+
+
+
+```{r}
+head(nwt_pikas)
+```
+
+
+```{r}
+nwt_pikas_doy <- nwt_pikas %>% 
+  # Add a new column called day_of_year
+  # yday extracts the day of year from the date column
+  mutate(day_of_year = yday(date)) %>% 
+  # relocate the day_of_year column after the date column
+  relocate(day_of_year, .after = date)
+
+head(nwt_pikas_doy)
+```
+
+
+### Q2.1 Make a question
+
+Does stress increase as a function of elevation?
+
+### Q2.2 Make a hypothesis
+
+We hypothesize that higher elevation increases stress in pika because there may be less food food availabale, as well as less oxygen. 
+
+### Q2.3 Graph the data
+```{r}
+nwt_pikas_doy %>% 
+  ggplot(aes(x = elev_m, y = concentration_pg_g)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(x = "Elevation",
+       y = "Stress")
+  # Make the y-axis include 0
+  ylim(0, NA)
+```
+
+### Q2.4 Set up and run a model
+
+```{r}
+# pika elevation model
+m.pika.elevation <- 
+  brm(data = nwt_pikas_doy, # Give the model the pika data
+      # Choose a gaussian (normal) distribution
+      family = gaussian,
+      # Specify the model here. 
+      concentration_pg_g ~ elev_m,
+      # Here's where you specify parameters for executing the Markov chains
+      # We're using similar to the defaults, except we set cores to 4 so the analysis runs faster than the default of 1
+      iter = 2000, warmup = 1000, chains = 4, cores = 4,
+      # Setting the "seed" determines which random numbers will get sampled.
+      # In this case, it makes the randomness of the Markov chain runs reproducible 
+      # (so that both of us get the exact same results when running the model)
+      seed = 4,
+      # Save the fitted model object as output - helpful for reloading in the output later
+      file = "output/m.pika.elevation")
+```
+
+### Q2.5 Assess the model
+
+```{r}
+plot(m.pika.elevation) # show posteriors and chains
+
+summary(m.pika.elevation)
+```
+The model ran correctly because the posterior samples have a smooth distribution with one clean peak, the chains are overlapping, and the chains are flat. 
+
+### Q2.6 Interpret the model
+
+For every one meter increase in elevation, stress level in pikas, measured using  glucocorticoid metabolite (GCM) concentration, decreases by 0.31 picogram GCM/gram. The confidence interval is -5.25 to 4.69, so it includes 0, and is not reasonably different from 0. 
+
+### Q2.7 Plot the model on the data
+
+We are using the prediction interval. 
+```{r}
+# prediction interval. this shows uncertainty in the data around the average response.
+confm.pika.elev <- predict_response(m.pika.elevation, interval = 'prediction')
+plot(confm.pika.elev, show_data = TRUE)
+```
+
+### Q2.8 Write a small results paragraph
+
+We found an decrease of 0.31 picogram GCM/gram of glucocorticoid metabolite (GCM) concentration per 1 meter of elevation, but our 95% credible intervals included zero (-5.25 to 4.69), suggesting that given our model, the effect of elevation on GCM concentration is not different from zero.
